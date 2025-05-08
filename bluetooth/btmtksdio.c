@@ -20,6 +20,8 @@
 #include <linux/of.h>
 #include <linux/pm_runtime.h>
 #include <linux/skbuff.h>
+#include <linux/etherdevice.h>
+
 
 #include <linux/mmc/host.h>
 #include <linux/mmc/sdio_ids.h>
@@ -62,10 +64,10 @@ static const struct btmtksdio_data mt7921_data = {
 };
 
 static const struct sdio_device_id btmtksdio_table[] = {
-	{SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, SDIO_DEVICE_ID_MEDIATEK_MT7663),
+/*	{SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, SDIO_DEVICE_ID_MEDIATEK_MT7663),
 	 .driver_data = (kernel_ulong_t)&mt7663_data },
 	{SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, SDIO_DEVICE_ID_MEDIATEK_MT7668),
-	 .driver_data = (kernel_ulong_t)&mt7668_data },
+	 .driver_data = (kernel_ulong_t)&mt7668_data }, */
 	{SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, SDIO_DEVICE_ID_MEDIATEK_MT7961),
 	 .driver_data = (kernel_ulong_t)&mt7921_data },
 	{ }	/* Terminating entry */
@@ -858,13 +860,26 @@ ignore_func_on:
 	return 0;
 }
 
+extern u8 *bt_get_mac(void);
+
 static int mt79xx_setup(struct hci_dev *hdev, const char *fwname)
 {
 	struct btmtksdio_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_hci_wmt_params wmt_params;
 	u8 param = 0x1;
-	int err;
+	int err, i;
+	
+	struct sk_buff *skb;
+	bdaddr_t current_bdaddr;
+	bdaddr_t target_bdaddr;
+	u8 *cmdline_mac;
+	static const bdaddr_t default_bdaddr = {
+		.b = {0x00, 0x1a, 0x7d, 0xda, 0x71, 0x13}
+	};
+	const char *mac_source = NULL;
 
+	bt_dev_info(hdev, "Loading firmware %s", fwname);
+	
 	err = btmtk_setup_firmware_79xx(hdev, fwname, mtk_hci_wmt_sync);
 	if (err < 0) {
 		bt_dev_err(hdev, "Failed to setup 79xx firmware (%d)", err);
@@ -892,11 +907,50 @@ static int mt79xx_setup(struct hci_dev *hdev, const char *fwname)
 		return err;
 	}
 
+	skb = __hci_cmd_sync(hdev, HCI_OP_READ_BD_ADDR, 0, NULL, HCI_INIT_TIMEOUT);
+	if (IS_ERR(skb)) {
+		err = PTR_ERR(skb);
+		bt_dev_warn(hdev, "Failed to read BDADDR from EEPROM (%d), assuming invalid", err);
+		memset(&current_bdaddr, 0, sizeof(current_bdaddr));
+	} else {
+		if (skb->len != 7 || skb->data[0] != 0x00) {
+			bt_dev_err(hdev, "Invalid EEPROM BDADDR response (len=%d, status=0x%02x)",
+				   skb->len, skb->data[0]);
+			memset(&current_bdaddr, 0, sizeof(current_bdaddr));
+		} else {
+			memcpy(current_bdaddr.b, skb->data + 1, 6);
+		}
+		kfree_skb(skb);
+	}
+
+	if (!is_valid_ether_addr(current_bdaddr.b)) {
+		cmdline_mac = bt_get_mac();
+		if (cmdline_mac && is_valid_ether_addr(cmdline_mac)) {
+			for (i = 0; i < 6; i++)
+				target_bdaddr.b[i] = cmdline_mac[5 - i];
+			mac_source = "cmdline";
+		} else {
+			memcpy(&target_bdaddr, &default_bdaddr, 6);
+			mac_source = "default";
+		}
+
+		bt_dev_info(hdev, "EEPROM BDADDR invalid (%pMR), using %s BDADDR: %pMR",
+			    &current_bdaddr, mac_source, &target_bdaddr);
+
+		err = btmtk_set_bdaddr(hdev, &target_bdaddr);
+		if (err < 0)
+			bt_dev_err(hdev, "Failed to set %s BDADDR (%d)", mac_source, err);
+
+		memcpy(&current_bdaddr, &target_bdaddr, sizeof(bdaddr_t));
+	} else {
+		bt_dev_info(hdev, "Using valid EEPROM BDADDR: %pMR", &current_bdaddr);
+	}
+
 	hci_set_msft_opcode(hdev, 0xFD30);
 	hci_set_aosp_capable(hdev);
 	set_bit(BTMTKSDIO_PATCH_ENABLED, &bdev->tx_state);
 
-	return err;
+	return 0;
 }
 
 static int btmtksdio_mtk_reg_read(struct hci_dev *hdev, u32 reg, u32 *val)
