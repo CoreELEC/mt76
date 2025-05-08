@@ -313,6 +313,7 @@ EXPORT_SYMBOL_GPL(mt7921_mac_init);
 static int __mt7921_init_hardware(struct mt7921_dev *dev)
 {
 	int ret;
+	int i;
 
 	/* force firmware operation mode into normal state,
 	 * which should be set before firmware download stage.
@@ -327,6 +328,15 @@ static int __mt7921_init_hardware(struct mt7921_dev *dev)
 	ret = mt7921_mcu_set_eeprom(dev);
 	if (ret)
 		goto out;
+
+	/* Wait for MAC address to become valid */
+	for (i = 0; i < 30; i++) {
+		if (is_valid_ether_addr(dev->mphy.macaddr)) {
+			msleep(2000);
+			break;
+		}
+		msleep(100);
+	}		
 
 	ret = mt7921_mac_init(dev);
 out:
