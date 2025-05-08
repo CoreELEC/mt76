@@ -102,14 +102,45 @@ out_put_node:
 }
 EXPORT_SYMBOL_GPL(mt76_get_of_eeprom);
 
+// Declare wifi_get_mac from wifi_dt.c
+extern u8 *wifi_get_mac(void);
+
+static int mt76_get_mac_from_cmdline(struct mt76_dev *dev, u8 *mac_addr)
+{
+	u8 *cmdline_mac = wifi_get_mac();
+
+	if (!cmdline_mac) {
+		dev_info(dev->dev, "Failed to get mac_wifi parameter\n");
+		return -EINVAL;
+	}
+
+	if (!is_valid_ether_addr(cmdline_mac)) {
+		dev_err(dev->dev, "Invalid MAC address from kernel cmdline: %pM\n", cmdline_mac);
+		return -EINVAL;
+	}
+
+	memcpy(mac_addr, cmdline_mac, ETH_ALEN);
+	return 0;
+}
+
 void
 mt76_eeprom_override(struct mt76_phy *phy)
 {
 	struct mt76_dev *dev = phy->dev;
 	struct device_node *np = dev->dev->of_node;
 
+	/* Try to get MAC address from device tree (EEPROM) */
 	of_get_mac_address(np, phy->macaddr);
 
+	/* If device tree MAC is invalid, try kernel command line mac_wifi */
+	if (!is_valid_ether_addr(phy->macaddr)) {
+		if (mt76_get_mac_from_cmdline(dev, phy->macaddr) == 0) {
+			dev_info(dev->dev, "Using MAC address from kernel command line: %pM\n",
+				phy->macaddr);
+		}
+	}
+
+	/* If still invalid, fall back to random MAC address */
 	if (!is_valid_ether_addr(phy->macaddr)) {
 		eth_random_addr(phy->macaddr);
 		dev_info(dev->dev,
