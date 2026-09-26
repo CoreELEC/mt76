@@ -419,6 +419,10 @@ int mt7921_register_device(struct mt7921_dev *dev)
 	struct ieee80211_hw *hw = mt76_hw(dev);
 	int ret;
 
+	ret = mt7921_load_power_limits(dev);
+	if (ret)
+		return ret;
+
 	dev->phy.dev = dev;
 	dev->phy.mt76 = &dev->mt76.phy;
 	dev->mt76.phy.priv = &dev->phy;

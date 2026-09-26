@@ -1383,7 +1383,8 @@ int __mt7921_mcu_set_clc(struct mt7921_dev *dev, u8 *alpha2,
 
 	if (dev->phy.chip_cap & MT7921_CHIP_CAP_CLC_EVT_EN)
 		req.cap |= CLC_CAP_EVT_EN;
-	if (mt76_find_power_limits_node(&dev->mt76))
+	if (mt76_find_power_limits_node(&dev->mt76) ||
+	    mt7921_has_power_limits(dev))
 		req.cap |= CLC_CAP_DTS_EN;
 
 	buf_len = le32_to_cpu(clc->len) - sizeof(*clc);
@@ -1439,6 +1440,8 @@ int mt7921_mcu_set_clc(struct mt7921_dev *dev, u8 *alpha2,
 {
 	struct mt7921_phy *phy = (struct mt7921_phy *)&dev->phy;
 	int i, ret;
+
+	mt7921_update_power_limits(dev, alpha2);
 
 	/* submit all clc config */
 	for (i = 0; i < ARRAY_SIZE(phy->clc); i++) {

@@ -371,6 +371,8 @@ struct mt76_driver_ops {
 	u8 mcs_rates;
 
 	void (*update_survey)(struct mt76_phy *phy);
+	void (*sku_power_limit)(struct mt76_dev *dev,
+				struct ieee80211_channel *chan, s8 *sku);
 
 	int (*tx_prepare_skb)(struct mt76_dev *dev, void *txwi_ptr,
 			      enum mt76_txq_id qid, struct mt76_wcid *wcid,
