@@ -323,6 +323,7 @@ struct mt7921_dev {
 	struct sk_buff_head ipv6_ns_list;
 
 	enum environment_cap country_ie_env;
+	struct mt7921_power_table *power_table;
 };
 
 enum {
@@ -382,6 +383,11 @@ u32 mt7921_reg_map(struct mt7921_dev *dev, u32 addr);
 
 int __mt7921_start(struct mt7921_phy *phy);
 int mt7921_register_device(struct mt7921_dev *dev);
+int mt7921_load_power_limits(struct mt7921_dev *dev);
+void mt7921_update_power_limits(struct mt7921_dev *dev, const u8 *alpha2);
+bool mt7921_has_power_limits(struct mt7921_dev *dev);
+void mt7921_apply_power_limits(struct mt76_dev *mdev,
+			       struct ieee80211_channel *chan, s8 *sku);
 void mt7921_unregister_device(struct mt7921_dev *dev);
 int mt7921_dma_init(struct mt7921_dev *dev);
 int mt7921_wpdma_reset(struct mt7921_dev *dev, bool force);

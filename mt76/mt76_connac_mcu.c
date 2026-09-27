@@ -2058,6 +2058,9 @@ mt76_connac_mcu_rate_txpower_band(struct mt76_phy *phy,
 
 			mt76_connac_mcu_build_sku(dev, sku_tlbv.pwr_limit,
 						  &limits, band);
+			if (dev->drv->sku_power_limit)
+				dev->drv->sku_power_limit(dev, &chan,
+							  sku_tlbv.pwr_limit);
 			skb_put_data(skb, &sku_tlbv, sku_len);
 		}
 		__skb_push(skb, sizeof(tx_power_tlv));
