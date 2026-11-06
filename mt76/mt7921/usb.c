@@ -155,7 +155,7 @@ static void mt7921u_stop(struct ieee80211_hw *hw)
 	struct mt7921_dev *dev = mt7921_hw_dev(hw);
 
 	mt76u_stop_tx(&dev->mt76);
-	mt7921_stop(hw);
+	mt7921_stop(hw, false);
 }
 
 static void mt7921u_cleanup(struct mt7921_dev *dev)
@@ -217,9 +217,10 @@ static int mt7921u_probe(struct usb_interface *usb_intf,
 	if (!(features & MT7921_FW_CAP_CNM)) {
 		ops->remain_on_channel = NULL;
 		ops->cancel_remain_on_channel = NULL;
-		ops->add_chanctx = NULL;
-		ops->remove_chanctx = NULL;
-		ops->change_chanctx = NULL;
+		ops->add_chanctx = ieee80211_emulate_add_chanctx;
+		ops->remove_chanctx = ieee80211_emulate_remove_chanctx;
+		ops->change_chanctx = ieee80211_emulate_change_chanctx;
+		ops->switch_vif_chanctx = ieee80211_emulate_switch_vif_chanctx;
 		ops->assign_vif_chanctx = NULL;
 		ops->unassign_vif_chanctx = NULL;
 		ops->mgd_prepare_tx = NULL;

@@ -195,7 +195,7 @@ int mt76_connac_mcu_set_vif_ps(struct mt76_dev *dev, struct ieee80211_vif *vif)
 			      */
 	} req = {
 		.bss_idx = mvif->idx,
-		.ps_state = vif->bss_conf.ps ? 2 : 0,
+		.ps_state = vif->cfg.ps ? 2 : 0,
 	};
 
 	if (vif->type != NL80211_IFTYPE_STATION)
@@ -406,7 +406,7 @@ void mt76_connac_mcu_sta_basic_tlv(struct sk_buff *skb,
 		else
 			conn_type = CONNECTION_INFRA_AP;
 		basic->conn_type = cpu_to_le32(conn_type);
-		basic->aid = cpu_to_le16(vif->bss_conf.aid);
+		basic->aid = cpu_to_le16(vif->cfg.aid);
 		break;
 	case NL80211_IFTYPE_ADHOC:
 		basic->conn_type = cpu_to_le32(CONNECTION_IBSS_ADHOC);
@@ -550,7 +550,7 @@ void mt76_connac_mcu_wtbl_generic_tlv(struct mt76_dev *dev,
 
 	if (sta) {
 		if (vif->type == NL80211_IFTYPE_STATION)
-			generic->partial_aid = cpu_to_le16(vif->bss_conf.aid);
+			generic->partial_aid = cpu_to_le16(vif->cfg.aid);
 		else
 			generic->partial_aid = cpu_to_le16(sta->aid);
 		memcpy(generic->peer_addr, sta->addr, ETH_ALEN);
@@ -596,14 +596,14 @@ mt76_connac_mcu_sta_amsdu_tlv(struct sk_buff *skb, struct ieee80211_sta *sta,
 	    vif->type != NL80211_IFTYPE_STATION)
 		return;
 
-	if (!sta->max_amsdu_len)
+	if (!sta->deflink.agg.max_amsdu_len)
 		return;
 
 	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_HW_AMSDU, sizeof(*amsdu));
 	amsdu = (struct sta_rec_amsdu *)tlv;
 	amsdu->max_amsdu_num = 8;
 	amsdu->amsdu_en = true;
-	amsdu->max_mpdu_size = sta->max_amsdu_len >=
+	amsdu->max_mpdu_size = sta->deflink.agg.max_amsdu_len >=
 			       IEEE80211_MAX_MPDU_LEN_VHT_7991;
 
 	wcid->amsdu = true;
@@ -774,8 +774,8 @@ mt76_connac_mcu_sta_he_tlv_v2(struct sk_buff *skb, struct ieee80211_sta *sta)
 		break;
 	}
 
-	he->pkt_ext = FIELD_GET(IEEE80211_HE_PHY_CAP9_NOMIMAL_PKT_PADDING_MASK,
-				IEEE80211_HE_PHY_CAP9_NOMIMAL_PKT_PADDING_16US);
+	he->pkt_ext = FIELD_GET(IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_MASK,
+				IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US);
 }
 
 static u8
@@ -934,7 +934,7 @@ void mt76_connac_mcu_wtbl_smps_tlv(struct sk_buff *skb,
 	tlv = mt76_connac_mcu_add_nested_tlv(skb, WTBL_SMPS, sizeof(*smps),
 					     wtbl_tlv, sta_wtbl);
 	smps = (struct wtbl_smps *)tlv;
-	smps->smps = (sta->smps_mode == IEEE80211_SMPS_DYNAMIC);
+	smps->smps = (sta->deflink.smps_mode == IEEE80211_SMPS_DYNAMIC);
 }
 EXPORT_SYMBOL_GPL(mt76_connac_mcu_wtbl_smps_tlv);
 
@@ -2107,8 +2107,10 @@ int mt76_connac_mcu_update_arp_filter(struct mt76_dev *dev,
 				      struct mt76_vif *vif,
 				      struct ieee80211_bss_conf *info)
 {
+	struct ieee80211_vif *mvif = container_of(info, struct ieee80211_vif,
+						  bss_conf);
 	struct sk_buff *skb;
-	int i, len = min_t(int, info->arp_addr_cnt,
+	int i, len = min_t(int, mvif->cfg.arp_addr_cnt,
 			   IEEE80211_BSS_ARP_ADDR_LIST_LEN);
 	struct {
 		struct {
@@ -2136,7 +2138,7 @@ int mt76_connac_mcu_update_arp_filter(struct mt76_dev *dev,
 
 	skb_put_data(skb, &req_hdr, sizeof(req_hdr));
 	for (i = 0; i < len; i++)
-		skb_put_data(skb, &info->arp_addr_list[i], sizeof(__be32));
+		skb_put_data(skb, &mvif->cfg.arp_addr_list[i], sizeof(__be32));
 
 	return mt76_mcu_skb_send_msg(dev, skb, MCU_UNI_CMD(OFFLOAD), true);
 }
